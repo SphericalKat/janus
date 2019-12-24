@@ -52,7 +52,7 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 		// try to find account in cache
 		jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID))
 		if err != nil { // cache miss
-			err = j.db.Where("key = ?", acc.CacheKey).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
+			err = j.db.Where("cache_key = ?", acc.CacheKey).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
 			if err == gorm.ErrRecordNotFound {                                                                         // not found in db
 				ctx = context.WithValue(ctx, "janus_context", &Account{})
 				r = r.WithContext(ctx)
