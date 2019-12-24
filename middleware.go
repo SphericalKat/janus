@@ -43,16 +43,17 @@ func NewJanusMiddleware(db *gorm.DB) (*Janus, error) {
 	}, nil
 }
 
+// GetHandler get an instance of the middleware handler
 func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		acc := ctx.Value("janus_context").(*Account)
 
 		// try to find account in cache
-		jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", acc.Key, acc.OrganizationID))
+		jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID))
 		if err != nil { // cache miss
-			err = j.db.Where("key = ?", acc.Key).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
-			if err == gorm.ErrRecordNotFound { // not found in db
+			err = j.db.Where("key = ?", acc.CacheKey).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
+			if err == gorm.ErrRecordNotFound {                                                                         // not found in db
 				ctx = context.WithValue(ctx, "janus_context", &Account{})
 				r = r.WithContext(ctx)
 				next.ServeHTTP(w, r)
@@ -60,7 +61,7 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 			}
 			// found in db, save to cache
 			jsun, _ = jettison.Marshal(acc)
-			_ = j.cache.Set(fmt.Sprintf("%v-%v", acc.Key, acc.OrganizationID), jsun)
+			_ = j.cache.Set(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID), jsun)
 		}
 
 		_ = json.Unmarshal(jsun, acc)
@@ -71,9 +72,10 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 	}
 }
 
+// SetRights set rights of a particular account
 func (j *Janus) SetRights(acc *Account) error {
 	jsun, _ := jettison.Marshal(acc)
-	err := j.cache.Set(fmt.Sprintf("%v-%v", acc.Key, acc.OrganizationID), jsun)
+	err := j.cache.Set(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID), jsun)
 	if err != nil {
 		return err
 	}
