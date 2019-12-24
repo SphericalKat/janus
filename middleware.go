@@ -1,8 +1,11 @@
 package janus
 
 import (
+	"context"
+	"encoding/json"
 	"github.com/allegro/bigcache"
 	"github.com/jinzhu/gorm"
+	"github.com/wI2L/jettison"
 	"net/http"
 	"time"
 )
@@ -39,13 +42,22 @@ func NewJanusMiddleware(db *gorm.DB) (*Janus, error) {
 	}, nil
 }
 
-func (j *Janus) saveAccount(account *Account) {
-	j.db.Save(account)
-}
-
-func JanusHandler(next http.Handler) http.HandlerFunc {
+func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		acc := ctx.Value("janus_context").(*Account)
 
+		jsun, err := j.cache.Get(acc.Key)
+		if err != nil {
+			j.db.Where("key = ?", acc.Key).Find(acc)
+			jsun, _ := jettison.Marshal(acc)
+			_ = j.cache.Set(acc.Key, jsun)
+		}
+
+		_ = json.Unmarshal(jsun, acc)
+
+		ctx = context.WithValue(ctx, "janus_context", acc)
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
 	}
 }
-
