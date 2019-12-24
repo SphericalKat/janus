@@ -1,7 +1,0 @@
-# github.com/allegro/bigcache v1.2.1
-github.com/allegro/bigcache
-github.com/allegro/bigcache/queue
-# github.com/jinzhu/gorm v1.9.11
-github.com/jinzhu/gorm
-# github.com/jinzhu/inflection v1.0.0
-github.com/jinzhu/inflection
