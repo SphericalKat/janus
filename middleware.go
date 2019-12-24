@@ -3,6 +3,7 @@ package janus
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/allegro/bigcache"
 	"github.com/jinzhu/gorm"
 	"github.com/wI2L/jettison"
@@ -47,11 +48,19 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 		ctx := r.Context()
 		acc := ctx.Value("janus_context").(*Account)
 
-		jsun, err := j.cache.Get(acc.Key)
-		if err != nil {
-			j.db.Where("key = ?", acc.Key).Find(acc)
-			jsun, _ := jettison.Marshal(acc)
-			_ = j.cache.Set(acc.Key, jsun)
+		// try to find account in cache
+		jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", acc.Key, acc.OrganizationID))
+		if err != nil { // cache miss
+			err = j.db.Where("key = ?", acc.Key).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
+			if err == gorm.ErrRecordNotFound { // not found in db
+				ctx = context.WithValue(ctx, "janus_context", &Account{})
+				r = r.WithContext(ctx)
+				next.ServeHTTP(w, r)
+				return
+			}
+			// found in db, save to cache
+			jsun, _ = jettison.Marshal(acc)
+			_ = j.cache.Set(fmt.Sprintf("%v-%v", acc.Key, acc.OrganizationID), jsun)
 		}
 
 		_ = json.Unmarshal(jsun, acc)
@@ -60,4 +69,19 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 		r = r.WithContext(ctx)
 		next.ServeHTTP(w, r)
 	}
+}
+
+func (j *Janus) SetRights(acc *Account) error {
+	jsun, _ := jettison.Marshal(acc)
+	err := j.cache.Set(fmt.Sprintf("%v-%v", acc.Key, acc.OrganizationID), jsun)
+	if err != nil {
+		return err
+	}
+
+	err = j.db.Save(acc).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
