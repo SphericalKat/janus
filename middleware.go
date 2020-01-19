@@ -17,7 +17,7 @@ type Janus struct {
 	cache *bigcache.BigCache
 }
 
-// NewJanusMiddleware return a new instance of the Janus middleware
+// NewJanusMiddleware returns a new instance of the Janus middleware
 func NewJanusMiddleware(db *gorm.DB) (*Janus, error) {
 	db.AutoMigrate(&Account{})
 
