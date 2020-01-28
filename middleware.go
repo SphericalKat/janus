@@ -7,6 +7,7 @@ import (
 	"github.com/allegro/bigcache"
 	"github.com/jinzhu/gorm"
 	"github.com/wI2L/jettison"
+	"log"
 	"net/http"
 	"time"
 )
@@ -53,7 +54,7 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 		jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID))
 		if err != nil { // cache miss
 			err = j.db.Where("cache_key = ?", acc.CacheKey).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
-			if err == gorm.ErrRecordNotFound {                                                                         // not found in db
+			if err == gorm.ErrRecordNotFound {                                                                               // not found in db
 				ctx = context.WithValue(ctx, "janus_context", &Account{})
 				r = r.WithContext(ctx)
 				next.ServeHTTP(w, r)
@@ -75,12 +76,12 @@ func (j *Janus) GetHandler(next http.Handler) http.HandlerFunc {
 // SetRights set rights of a particular account
 func (j *Janus) SetRights(acc *Account) error {
 	jsun, _ := jettison.Marshal(acc)
-	err := j.cache.Set(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID), jsun)
+	err := j.db.Save(acc).Error
 	if err != nil {
 		return err
 	}
 
-	err = j.db.Save(acc).Error
+	err = j.cache.Set(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID), jsun)
 	if err != nil {
 		return err
 	}
@@ -89,20 +90,22 @@ func (j *Janus) SetRights(acc *Account) error {
 }
 
 func (j *Janus) GetRights(key string, orgID uint) (*Account, error) {
-	acc := &Account{}
+	acc := &Account{CacheKey: key, OrganizationID: orgID}
+	log.Println("Acc1", acc)
 
 	// try to find account in cache
 	jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", key, orgID))
 	if err != nil { // cache miss
-		err = j.db.Where("cache_key = ?", key).Where("organization_id = ?", orgID).Find(acc).Error // try to find in db
-		if err == gorm.ErrRecordNotFound {                                                                         // not found in db
+		err = j.db.Where("cache_key = ?", acc.CacheKey).Where("organization_id = ?", acc.OrganizationID).Find(acc).Error // try to find in db
+		if err == gorm.ErrRecordNotFound {                                                                               // not found in db
 			return nil, err
 		}
 		// found in db, save to cache
 		jsun, _ = jettison.Marshal(acc)
 		_ = j.cache.Set(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID), jsun)
-
-		return acc, nil
 	}
-	return nil, err
+	_ = json.Unmarshal(jsun, acc)
+	log.Println("Acc2", acc)
+
+	return acc, nil
 }
