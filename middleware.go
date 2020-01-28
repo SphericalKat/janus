@@ -87,3 +87,22 @@ func (j *Janus) SetRights(acc *Account) error {
 
 	return nil
 }
+
+func (j *Janus) GetRights(key string, orgID uint) (*Account, error) {
+	acc := &Account{}
+
+	// try to find account in cache
+	jsun, err := j.cache.Get(fmt.Sprintf("%v-%v", key, orgID))
+	if err != nil { // cache miss
+		err = j.db.Where("cache_key = ?", key).Where("organization_id = ?", orgID).Find(acc).Error // try to find in db
+		if err == gorm.ErrRecordNotFound {                                                                         // not found in db
+			return nil, err
+		}
+		// found in db, save to cache
+		jsun, _ = jettison.Marshal(acc)
+		_ = j.cache.Set(fmt.Sprintf("%v-%v", acc.CacheKey, acc.OrganizationID), jsun)
+
+		return acc, nil
+	}
+	return nil, err
+}
